@@ -278,6 +278,7 @@ YUI.Env[Y.version].modules = YUI.Env[Y.version].modules || {
     "calendar": {
         "lang": [
             "en", 
+            "ja", 
             "ru"
         ], 
         "requires": [
@@ -289,6 +290,7 @@ YUI.Env[Y.version].modules = YUI.Env[Y.version].modules || {
     "calendar-base": {
         "lang": [
             "en", 
+            "ja", 
             "ru"
         ], 
         "requires": [
@@ -345,7 +347,8 @@ YUI.Env[Y.version].modules = YUI.Env[Y.version].modules || {
     "console": {
         "lang": [
             "en", 
-            "es"
+            "es", 
+            "ja"
         ], 
         "requires": [
             "yui-log", 
@@ -1192,6 +1195,7 @@ YUI.Env[Y.version].modules = YUI.Env[Y.version].modules || {
     "highlight-base": {
         "requires": [
             "array-extras", 
+            "classnamemanager", 
             "escape", 
             "text-wordbreak"
         ]
@@ -1299,7 +1303,7 @@ YUI.Env[Y.version].modules = YUI.Env[Y.version].modules || {
     "io-xdr": {
         "requires": [
             "io-base", 
-            "datatype-xml"
+            "datatype-xml-parse"
         ]
     }, 
     "json": {
@@ -2037,4 +2041,4 @@ YUI.Env[Y.version].modules = YUI.Env[Y.version].modules || {
         ]
     }
 };
-YUI.Env[Y.version].md5 = 'ae7c21f9334a951f6f7fccf02d14a25f';
+YUI.Env[Y.version].md5 = '105ebffae27a0e3d7331f8cf5c0bb282';

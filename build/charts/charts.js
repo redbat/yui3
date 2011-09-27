@@ -3169,6 +3169,24 @@ Y.AxisType = Y.Base.create("baseAxis", Y.Axis, [], {
     {
         this._updateMinAndMax();
 		this.fire("dataUpdate");
+    },
+
+    /**
+     * Checks to see if data extends beyond the range of the axis. If so,
+     * that data will need to be hidden. This method is internal, temporary and subject
+     * to removal in the future.
+     *
+     * @method _hasDataOverflow
+     * @protected
+     * @return Boolean
+     */
+    _hasDataOverflow: function()
+    {
+        if(this.get("setMin") || this.get("setMax"))
+        {
+            return true;
+        }
+        return false;
     }
 }, {
     ATTRS: {
@@ -3294,6 +3312,8 @@ Y.AxisType = Y.Base.create("baseAxis", Y.Axis, [], {
          * @type Number
          */
         maximum: {
+            lazyAdd: false,
+
             getter: function ()
             {
                 var max = this.get("dataMaximum"),
@@ -3342,6 +3362,8 @@ Y.AxisType = Y.Base.create("baseAxis", Y.Axis, [], {
          * @type Number
          */
         minimum: {
+            lazyAdd: false,
+
             getter: function ()
             {
                 var min = this.get("dataMinimum");
@@ -3607,46 +3629,44 @@ Y.extend(NumericAxis, Y.AxisType,
             min = 0,
             len,
             num,
-            i,
+            i = 0,
             key,
-            setMax = this._setMaximum,
-            setMin = this._setMinimum;
-        if(!setMax && !setMin)
+            setMax = this.get("setMax"),
+            setMin = this.get("setMin");
+        if(!setMax || !setMin)
         {
             if(data && data.length && data.length > 0)
             {
                 len = data.length;
-                max = min = data[0];
-                if(len > 1)
-                {
-                    for(i = 1; i < len; i++)
-                    {	
-                        num = data[i];
-                        if(isNaN(num))
+                for(; i < len; i++)
+                {	
+                    num = data[i];
+                    if(isNaN(num))
+                    {
+                        if(Y_Lang.isObject(num))
                         {
-                            if(Y_Lang.isObject(num))
+                            min = max = 0;
+                            //hloc values
+                            for(key in num)
                             {
-                                min = max = 0;
-                                //hloc values
-                                for(key in num)
-                                {
-                                   if(num.hasOwnProperty(key))
-                                   {
-                                        max = Math.max(num[key], max);
-                                        min = Math.min(num[key], min);
-                                   }
-                                }
+                               if(num.hasOwnProperty(key))
+                               {
+                                    max = Math.max(num[key], max);
+                                    min = Math.min(num[key], min);
+                               }
                             }
-                            max = setMax ? this._setMaximum : max;
-                            min = setMin ? this._setMinimum : min;
-                            continue;
                         }
-                        max = setMax ? this._setMaximum : Math.max(num, max);
-                        min = setMin ? this._setMinimum : Math.min(num, min);
+                        max = setMax ? this._setMaximum : max;
+                        min = setMin ? this._setMinimum : min;
+                        continue;
                     }
+                    max = setMax ? this._setMaximum : Math.max(num, max);
+                    min = setMin ? this._setMinimum : Math.min(num, min);
+                    this._actualMaximum = max;
+                    this._actualMinimum = min;
                 }
             }
-            this._roundMinAndMax(min, max);
+            this._roundMinAndMax(min, max, setMin, setMax);
         }
     },
 
@@ -3658,7 +3678,7 @@ Y.extend(NumericAxis, Y.AxisType,
      * @param {Number} max Maximum value
      * @private
      */
-    _roundMinAndMax: function(min, max)
+    _roundMinAndMax: function(min, max, setMin, setMax)
     {
         var roundingUnit,
             minimumRange,
@@ -3682,46 +3702,143 @@ Y.extend(NumericAxis, Y.AxisType,
                 roundingUnit = this._getMinimumUnit(max, min, units);
                 if(minGreaterThanZero && maxGreaterThanZero)
                 {
-                    if(alwaysShowZero || min < roundingUnit)
+                    if((alwaysShowZero || min < roundingUnit) && !setMin)
                     {
                         min = 0;
-                    }
-                    roundingUnit = this._getMinimumUnit(max, min, units);
-                    max = this._roundUpToNearest(max, roundingUnit);
-                }
-                else if(maxGreaterThanZero && !minGreaterThanZero)
-                {
-                        topTicks = Math.round( units / ((-1 * min)/max + 1)    );
-                        topTicks = Math.max(Math.min(topTicks, units - 1), 1);
-                        botTicks = units - topTicks;
-                        tempMax = Math.ceil( max/topTicks );
-
-                        tempMin = Math.floor( min/botTicks ) * -1;
-                        
-                        roundingUnit = Math.max(tempMax, tempMin);
-                        roundingUnit = this._getNiceNumber(roundingUnit);  
-                        max = roundingUnit * topTicks;
-                        min = roundingUnit * botTicks * -1;
-                }
-                else
-                {
-                    if(alwaysShowZero || max === 0 || max + roundingUnit > 0)
-                    {
-                        max = 0;
                         roundingUnit = this._getMinimumUnit(max, min, units);
+                    }
+                    else
+                    {
+                       min = this._roundDownToNearest(min, roundingUnit);
+                    }
+                    if(setMax)
+                    {
+                        if(!alwaysShowZero)
+                        {
+                            min = max - (roundingUnit * units);
+                        }
+                    }
+                    else if(setMin)
+                    {
+                        max = min + (roundingUnit * units);
                     }
                     else
                     {
                         max = this._roundUpToNearest(max, roundingUnit);
                     }
-                    min = max - (roundingUnit * units);
+                }
+                else if(maxGreaterThanZero && !minGreaterThanZero)
+                {
+                    if(alwaysShowZero)
+                    {
+                        topTicks = Math.round(units/((-1 * min)/max + 1));
+                        topTicks = Math.max(Math.min(topTicks, units - 1), 1);
+                        botTicks = units - topTicks;
+                        tempMax = Math.ceil( max/topTicks );
+                        tempMin = Math.floor( min/botTicks ) * -1;
+                        
+                        if(setMin)
+                        {
+                            while(tempMin < tempMax && botTicks >= 0)
+                            {
+                                botTicks--;
+                                topTicks++;
+                                tempMax = Math.ceil( max/topTicks );
+                                tempMin = Math.floor( min/botTicks ) * -1;
+                            }
+                            //if there are any bottom ticks left calcualate the maximum by multiplying by the tempMin value
+                            //if not, it's impossible to ensure that a zero is shown. skip it
+                            if(botTicks > 0)
+                            {
+                                max = tempMin * topTicks;
+                            }
+                            else
+                            {
+                                max = min + (roundingUnit * units);
+                            }
+                        }
+                        else if(setMax)
+                        {
+                            while(tempMax < tempMin && topTicks >= 0)
+                            {
+                                botTicks++;
+                                topTicks--;
+                                tempMin = Math.floor( min/botTicks ) * -1;
+                                tempMax = Math.ceil( max/topTicks );
+                            }
+                            //if there are any top ticks left calcualate the minimum by multiplying by the tempMax value
+                            //if not, it's impossible to ensure that a zero is shown. skip it
+                            if(topTicks > 0)
+                            {
+                                min = tempMax * botTicks * -1;
+                            }
+                            else
+                            {
+                                min = max - (roundingUnit * units);
+                            }
+                        }
+                        else
+                        {
+                            roundingUnit = Math.max(tempMax, tempMin);
+                            roundingUnit = this._getNiceNumber(roundingUnit);  
+                            max = roundingUnit * topTicks;
+                            min = roundingUnit * botTicks * -1;
+                        }
+                    }
+                    else 
+                    {
+                        if(setMax)
+                        {
+                            min = max - (roundingUnit * units);
+                        }
+                        else if(setMin)
+                        {
+                            max = min + (roundingUnit * units);
+                        }
+                        else
+                        {
+                            min = this._roundDownToNearest(min, roundingUnit);
+                            max = this._roundUpToNearest(max, roundingUnit);
+                        }
+                    }
+                }
+                else
+                {
+                    if(setMin)
+                    {
+                        if(alwaysShowZero)
+                        {
+                            max = 0;
+                        }
+                        else
+                        {
+                            max = min + (roundingUnit * units);
+                        }
+                    }
+                    else if(!setMax)
+                    {
+                        if(alwaysShowZero || max === 0 || max + roundingUnit > 0)
+                        {
+                            max = 0;
+                            roundingUnit = this._getMinimumUnit(max, min, units);
+                        }
+                        else
+                        {
+                            max = this._roundUpToNearest(max, roundingUnit);
+                        }
+                        min = max - (roundingUnit * units);
+                    }
+                    else
+                    {
+                        min = max - (roundingUnit * units);
+                    }
                 }
             }
             else if(roundingMethod == "auto") 
             {
                 if(minGreaterThanZero && maxGreaterThanZero)
                 {
-                    if(alwaysShowZero || min < (max-min)/units)
+                    if((alwaysShowZero || min < (max-min)/units) && !setMin)
                     {
                         min = 0;
                     }
@@ -3797,7 +3914,15 @@ Y.extend(NumericAxis, Y.AxisType,
                 dataRangeGreater = (max - min) > minimumRange;
                 minRound = this._roundDownToNearest(min, roundingUnit);
                 maxRound = this._roundUpToNearest(max, roundingUnit);
-                if(minGreaterThanZero && maxGreaterThanZero)
+                if(setMax)
+                {
+                    min = max - minimumRange;
+                }
+                else if(setMin)
+                {
+                    max = min + minimumRange;
+                }
+                else if(minGreaterThanZero && maxGreaterThanZero)
                 {
                     if(alwaysShowZero || minRound <= 0)
                     {
@@ -3807,30 +3932,16 @@ Y.extend(NumericAxis, Y.AxisType,
                     {
                         min = minRound;
                     }
-                    if(!dataRangeGreater)
-                    {
-                        max = min + minimumRange;
-                    }
-                    else
-                    {
-                        max = maxRound;
-                    }
+                    max = min + minimumRange;
                 }
                 else if(maxGreaterThanZero && !minGreaterThanZero)
                 {
                     min = minRound;
-                    if(!dataRangeGreater)
-                    {
-                        max = min + minimumRange;
-                    }
-                    else
-                    {
-                        max = maxRound;
-                    }
+                    max = min + minimumRange;
                 }
                 else
                 {
-                    if(max === 0 || alwaysShowZero)
+                    if(alwaysShowZero || maxRound >= 0)
                     {
                         max = 0;
                     }
@@ -3838,14 +3949,7 @@ Y.extend(NumericAxis, Y.AxisType,
                     {
                         max = maxRound;
                     }
-                    if(!dataRangeGreater)
-                    {
-                        min = max - minimumRange;
-                    }
-                    else
-                    {
-                        min = minRound;
-                    }
+                    min = max - minimumRange;
                 }
             }
         }
@@ -3867,7 +3971,8 @@ Y.extend(NumericAxis, Y.AxisType,
         var min = this.get("minimum"),
             max = this.get("maximum"),
             increm = (max - min)/(l-1),
-            label;
+            label,
+            roundingMethod = this.get("roundingMethod");
             l -= 1;
         //respect the min and max. calculate all other labels.
         if(i === 0)
@@ -3880,8 +3985,12 @@ Y.extend(NumericAxis, Y.AxisType,
         }
         else
         {
-            label = min + (i * increm);
-            label = this._roundToNearest(label, increm);
+            label = (i * increm);
+            if(this.get("roundingMethod") == "niceNumber")
+            {
+                label = this._roundToNearest(label, increm);
+            }
+            label += min;
         }
         return label;
     },
@@ -3962,6 +4071,34 @@ Y.extend(NumericAxis, Y.AxisType,
         precision = precision || 0;
         var decimalPlaces = Math.pow(10, precision);
         return Math.round(decimalPlaces * number) / decimalPlaces;
+    },
+    
+    /**
+     * Checks to see if data extends beyond the range of the axis. If so,
+     * that data will need to be hidden. This method is internal, temporary and subject
+     * to removal in the future.
+     *
+     * @method _hasDataOverflow
+     * @protected
+     * @return Boolean
+     */
+    _hasDataOverflow: function()
+    {
+        var roundingMethod,
+            min,
+            max;
+        if(this.get("setMin") || this.get("setMax"))
+        {
+            return true;
+        }
+        roundingMethod = this.get("roundingMethod");
+        min = this._actualMinimum;
+        max = this._actualMaximum;
+        if(Y_Lang.isNumber(roundingMethod) && ((Y_Lang.isNumber(max) && max > this._dataMaximum) || (Y_Lang.isNumber(min) && min < this._dataMinimum)))
+        {
+            return true;
+        }
+        return false;
     }
 });
 
@@ -4002,7 +4139,9 @@ Y.extend(StackedAxis, Y.NumericAxis,
             i = 0,
             key,
             num,
-            keys = this.get("keys");
+            keys = this.get("keys"),
+            setMin = this.get("setMin"),
+            setMax = this.get("setMax");
 
         for(key in keys)
         {
@@ -4051,7 +4190,17 @@ Y.extend(StackedAxis, Y.NumericAxis,
                 min = Math.min(min, pos);
             }
         }
-        this._roundMinAndMax(min, max);
+        this._actualMaximum = max;
+        this._actualMinimum = min;
+        if(setMax)
+        {
+            max = this._setMaximum;
+        }
+        if(setMin)
+        {
+            min = this._setMinimum;
+        }
+        this._roundMinAndMax(min, max, setMin, setMax);
     }
 });
 
@@ -5659,9 +5808,7 @@ Plots.prototype = {
      */
     _clearMarkerCache: function()
     {
-        var len = this._markerCache.length,
-            i = 0,
-            marker;
+        var marker;
         while(this._markerCache.length > 0)
         {
             marker = this._markerCache.shift();
@@ -6185,6 +6332,10 @@ Y.CartesianSeries = Y.Base.create("cartesianSeries", Y.Base, [Y.Renderer], {
         if((this.get("xData") && this.get("yData")) || this._updateAxisData())
         {
             this.draw();
+        }
+        else
+        {
+            this.fire("drawingComplete");
         }
     },
 
@@ -8138,6 +8289,12 @@ Y.StackedColumnSeries = Y.Base.create("stackedColumnSeries", Y.ColumnSeries, [Y.
             lastCollection = seriesCollection[order - 1];
             negativeBaseValues = lastCollection.get("negativeBaseValues");
             positiveBaseValues = lastCollection.get("positiveBaseValues");
+            if(!negativeBaseValues || !positiveBaseValues)
+            {
+                useOrigin = true;
+                positiveBaseValues = [];
+                negativeBaseValues = [];
+            }
         }
         else
         {
@@ -8404,6 +8561,12 @@ Y.StackedBarSeries = Y.Base.create("stackedBarSeries", Y.BarSeries, [Y.StackingU
             lastCollection = seriesCollection[order - 1];
             negativeBaseValues = lastCollection.get("negativeBaseValues");
             positiveBaseValues = lastCollection.get("positiveBaseValues");
+            if(!negativeBaseValues || !positiveBaseValues)
+            {
+                useOrigin = true;
+                positiveBaseValues = [];
+                negativeBaseValues = [];
+            }
         }
         else
         {
@@ -8820,8 +8983,23 @@ Y.PieSeries = Y.Base.create("pieSeries", Y.MarkerSeries, [], {
         if(isFinite(w) && isFinite(h) && w > 0 && h > 0)
         {   
             this._rendered = true;
+            if(this._drawing)
+            {
+                this._callLater = true;
+                return;
+            }
+            this._drawing = true;
+            this._callLater = false;
             this.drawSeries();
-            this.fire("drawingComplete");
+            this._drawing = false;
+            if(this._callLater)
+            {
+                this.draw();
+            }
+            else
+            {
+                this.fire("drawingComplete");
+            }
         }
     },
 
@@ -8850,8 +9028,9 @@ Y.PieSeries = Y.Base.create("pieSeries", Y.MarkerSeries, [], {
             tfa,
             padding = styles.padding,
             graph = this.get("graph"),
-            w = graph.get("width") - (padding.left + padding.right),
-            h = graph.get("height") - (padding.top + padding.bottom),
+            minDimension = Math.min(graph.get("width"), graph.get("height")),
+            w = minDimension - (padding.left + padding.right),
+            h = minDimension - (padding.top + padding.bottom),
             startAngle = -90,
             halfWidth = w / 2,
             halfHeight = h / 2,
@@ -8866,7 +9045,6 @@ Y.PieSeries = Y.Base.create("pieSeries", Y.MarkerSeries, [], {
             marker,
             graphOrder = this.get("graphOrder"),
             isCanvas = Y.Graphic.NAME == "canvasGraphic";
-
         for(; i < itemCount; ++i)
         {
             value = values[i];
@@ -9977,7 +10155,7 @@ Y.Graph = Y.Base.create("graph", Y.Widget, [Y.Renderer], {
         for(; i < len; ++i)
         {
             sc[i].draw();
-            if(!sc[i].get("xcoords") || !sc[i].get("ycoords"))
+            if((!sc[i].get("xcoords") || !sc[i].get("ycoords")) && !sc[i] instanceof Y.PieSeries)
             {
                 this._callLater = true;
                 break;
@@ -10174,7 +10352,7 @@ Y.Graph = Y.Base.create("graph", Y.Widget, [Y.Renderer], {
                 if(!this._background)
                 {
                     this._backgroundGraphic = new Y.Graphic({render:this.get("contentBox")});
-                    this._backgroundGraphic.get("node").style.zIndex = -2;
+                    Y.one(this._backgroundGraphic.get("node")).setStyle("zIndex", 0); 
                     this._background = this._backgroundGraphic.addShape({type: "rect"});
                 }
                 return this._background;
@@ -10196,7 +10374,7 @@ Y.Graph = Y.Base.create("graph", Y.Widget, [Y.Renderer], {
                 if(!this._gridlines)
                 {
                     this._gridlinesGraphic = new Y.Graphic({render:this.get("contentBox")});
-                    this._gridlinesGraphic.get("node").style.zIndex = -1;
+                    Y.one(this._gridlinesGraphic.get("node")).setStyle("zIndex", 1); 
                     this._gridlines = this._gridlinesGraphic.addShape({type: "path"});
                 }
                 return this._gridlines;
@@ -10218,6 +10396,7 @@ Y.Graph = Y.Base.create("graph", Y.Widget, [Y.Renderer], {
                 if(!this._graphic)
                 {
                     this._graphic = new Y.Graphic({render:this.get("contentBox")});
+                    Y.one(this._graphic.get("node")).setStyle("zIndex", 2); 
                     this._graphic.set("autoDraw", false);
                 }
                 return this._graphic;
@@ -10760,9 +10939,12 @@ ChartBase.prototype = {
          *      <dt>node</dt><dd>The dom node of the marker.</dd>
          *      <dt>x</dt><dd>The x-coordinate of the mouse in relation to the Chart.</dd>
          *      <dt>y</dt><dd>The y-coordinate of the mouse in relation to the Chart.</dd>
+         *      <dt>pageX</dt><dd>The x location of the event on the page (including scroll)</dd>
+         *      <dt>pageY</dt><dd>The y location of the event on the page (including scroll)</dd>
          *      <dt>series</dt><dd>Reference to the series of the marker.</dd>
          *      <dt>index</dt><dd>Index of the marker in the series.</dd>
          *      <dt>seriesIndex</dt><dd>The `order` of the marker's series.</dd>
+         *      <dt>originEvent</dt><dd>Underlying dom event.</dd>
          *  </dl>
          */
         this.fire("markerEvent:" + type, {
@@ -11166,11 +11348,13 @@ Y.CartesianChart = Y.Base.create("cartesianChart", Y.Widget, [Y.ChartBase], {
             bb = this.get("boundingBox"),
             cb = graph.get("contentBox"),
             pageX = e.pageX,
-            offsetX = pageX - cb.getX(),
-            posX = pageX - bb.getX(),
             pageY = e.pageY,
-            offsetY = pageY - cb.getY(),
+            posX = pageX - bb.getX(),
             posY = pageY - bb.getY(),
+            offset = {
+                x: pageX - cb.getX(),
+                y: pageY - cb.getY()
+            },
             sc = graph.get("seriesCollection"),
             series,
             i = 0,
@@ -11182,83 +11366,117 @@ Y.CartesianChart = Y.Base.create("cartesianChart", Y.Widget, [Y.ChartBase], {
             valueItems = [],
             direction = this.get("direction"),
             hasMarkers,
-            coord = direction == "horizontal" ? offsetX : offsetY,
+            catAxis,
+            valAxis,
+            coord,
             //data columns and area data could be created on a graph level
-            markerPlane = direction == "horizontal" ? sc[0].get("xMarkerPlane") : sc[0].get("yMarkerPlane"),
-            len = markerPlane.length;
-       for(; i < len; ++i)
-       {
-            if(coord <= markerPlane[i].end && coord >= markerPlane[i].start)
-            {
-                index = i;
-                break;
-            }
-       }
-       len = sc.length;
-       for(i = 0; i < len; ++i)
-       {
-            series = sc[i];
-            hasMarkers = series.get("markers");
-            if(hasMarkers && !isNaN(oldIndex) && oldIndex > -1)
-            {
-                series.updateMarkerState("mouseout", oldIndex);
-            }
-            if(series.get("ycoords")[index] > -1)
-            {
-                if(hasMarkers && !isNaN(index) && index > -1)
-                {
-                    series.updateMarkerState("mouseover", index);
-                }
-                item = this.getSeriesItems(series, index);
-                categoryItems.push(item.category);
-                valueItems.push(item.value);
-                items.push(series);
-            }
-                
-        }
-        this._selectedIndex = index;
-        
-        /**
-         * Broadcasts when `interactionType` is set to `planar` and a series' marker plane has received a mouseover event.
-         * 
-         *
-         * @event planarEvent:mouseover
-         * @preventable false
-         * @param {EventFacade} e Event facade with the following additional
-         *   properties:
-         *  <dl>
-         *      <dt>categoryItem</dt><dd>An array of hashes, each containing information about the category `Axis` of each marker whose plane has been intersected.</dd>
-         *      <dt>valueItem</dt><dd>An array of hashes, each containing information about the value `Axis` of each marker whose plane has been intersected.</dd>
-         *      <dt>x</dt><dd>The x-coordinate of the mouse in relation to the Chart.</dd>
-         *      <dt>y</dt><dd>The y-coordinate of the mouse in relation to the Chart.</dd>
-         *      <dt>items</dt><dd>An array including all the series which contain a marker whose plane has been intersected.</dd>
-         *      <dt>index</dt><dd>Index of the markers in their respective series.</dd>
-         *  </dl>
-         */
-        /**
-         * Broadcasts when `interactionType` is set to `planar` and a series' marker plane has received a mouseout event.
-         *
-         * @event planarEvent:mouseout
-         * @preventable false
-         * @param {EventFacade} e 
-         */
-        if(index > -1)
+            markerPlane,
+            len,
+            coords;
+        if(direction == "horizontal")
         {
-            this.fire("planarEvent:mouseover", {
-                categoryItem:categoryItems, 
-                valueItem:valueItems, 
-                x:posX, 
-                y:posY, 
-                pageX:pageX,
-                pageY:pageY,
-                items:items, 
-                index:index,
-                originEvent:e
-            });
+            catAxis = "x";
+            valAxis = "y";
         }
         else
         {
-            this.fire("planarEvent:mouseout");
+            valAxis = "x";
+            catAxis = "y";
+        }
+        coord = offset[catAxis];
+        if(sc)
+        {
+            len = sc.length;
+            while(i < len && !markerPlane)
+            {
+                if(sc[i])
+                {
+                    markerPlane = sc[i].get(catAxis + "MarkerPlane");
+                }
+                i++;
+            }
+        }
+        if(markerPlane)
+        {
+            len = markerPlane.length;
+            for(i = 0; i < len; ++i)
+            {
+                if(coord <= markerPlane[i].end && coord >= markerPlane[i].start)
+                {
+                    index = i;
+                    break;
+                }
+            }
+            len = sc.length;
+            for(i = 0; i < len; ++i)
+            {
+                series = sc[i];
+                coords = series.get(valAxis + "coords");
+                hasMarkers = series.get("markers");
+                if(hasMarkers && !isNaN(oldIndex) && oldIndex > -1)
+                {
+                    series.updateMarkerState("mouseout", oldIndex);
+                }
+                if(coords && coords[index] > -1)
+                {
+                    if(hasMarkers && !isNaN(index) && index > -1)
+                    {
+                        series.updateMarkerState("mouseover", index);
+                    }
+                    item = this.getSeriesItems(series, index);
+                    categoryItems.push(item.category);
+                    valueItems.push(item.value);
+                    items.push(series);
+                }
+                    
+            }
+            this._selectedIndex = index;
+
+            /**
+             * Broadcasts when `interactionType` is set to `planar` and a series' marker plane has received a mouseover event.
+             * 
+             *
+             * @event planarEvent:mouseover
+             * @preventable false
+             * @param {EventFacade} e Event facade with the following additional
+             *   properties:
+             *  <dl>
+             *      <dt>categoryItem</dt><dd>An array of hashes, each containing information about the category `Axis` of each marker whose plane has been intersected.</dd>
+             *      <dt>valueItem</dt><dd>An array of hashes, each containing information about the value `Axis` of each marker whose plane has been intersected.</dd>
+             *      <dt>x</dt><dd>The x-coordinate of the mouse in relation to the Chart.</dd>
+             *      <dt>y</dt><dd>The y-coordinate of the mouse in relation to the Chart.</dd>
+             *      <dt>pageX</dt><dd>The x location of the event on the page (including scroll)</dd>
+             *      <dt>pageY</dt><dd>The y location of the event on the page (including scroll)</dd>
+             *      <dt>items</dt><dd>An array including all the series which contain a marker whose plane has been intersected.</dd>
+             *      <dt>index</dt><dd>Index of the markers in their respective series.</dd>
+             *      <dt>originEvent</dt><dd>Underlying dom event.</dd>
+             *  </dl>
+             */
+            /**
+             * Broadcasts when `interactionType` is set to `planar` and a series' marker plane has received a mouseout event.
+             *
+             * @event planarEvent:mouseout
+             * @preventable false
+             * @param {EventFacade} e 
+             */
+            if(index > -1)
+            {
+                this.fire("planarEvent:mouseover", {
+                    categoryItem:categoryItems, 
+                    valueItem:valueItems, 
+                    x:posX, 
+                    y:posY, 
+                    pageX:pageX,
+                    pageY:pageY,
+                    items:items, 
+                    index:index,
+                    originEvent:e
+                });
+            }
+            else
+            {
+                this.fire("planarEvent:mouseout");
+            }
         }
     },
 
@@ -12161,7 +12379,7 @@ Y.CartesianChart = Y.Base.create("cartesianChart", Y.Widget, [Y.ChartBase], {
                 axis.get("boundingBox").setStyle("left", lw + "px");
                 axis.get("boundingBox").setStyle("top", pts[i].y);
             }
-            if(axis.get("setMax") || axis.get("setMin"))
+            if(axis._hasDataOverflow())
             {
                 graphOverflow = "hidden";
             }
@@ -12938,7 +13156,11 @@ Y.PieChart = Y.Base.create("pieChart", Y.Widget, [Y.ChartBase], {
      */
     _sizeChanged: function(e)
     {
-        this._redraw();
+        var graph = this.get("graph");
+        if(graph)
+        {
+            graph.set(e.attrName, e.newVal);
+        }
     },
 
     /**
