@@ -145,6 +145,7 @@ YUI.add('loader-tests', function(Y) {
 		require:['autocomplete-sources', "controller"]
             });
             var out = loader.resolve(true);
+
             Assert.isTrue((out.js.length === 1), 'NO JS files returned');
             Assert.isTrue((out.css.length === 1), 'NO CSS files returned');
             Assert.isTrue((out.js[0].indexOf('jsonp-min.js') > 0) 
