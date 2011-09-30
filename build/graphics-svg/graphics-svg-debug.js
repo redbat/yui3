@@ -2765,4 +2765,4 @@ Y.SVGGraphic = SVGGraphic;
 
 
 
-}, '@VERSION@' ,{requires:['graphics'], skinnable:false});
+}, '@VERSION@' ,{skinnable:false, requires:['graphics']});

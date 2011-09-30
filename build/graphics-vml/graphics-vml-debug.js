@@ -2810,4 +2810,4 @@ Y.VMLGraphic = VMLGraphic;
 
 
 
-}, '@VERSION@' ,{requires:['graphics'], skinnable:false});
+}, '@VERSION@' ,{skinnable:false, requires:['graphics']});

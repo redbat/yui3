@@ -152,4 +152,4 @@ QueryString.unescape = function (s) {
 
 
 
-}, '@VERSION@' ,{requires:['array-extras', 'yui-base']});
+}, '@VERSION@' ,{requires:['array-extras', 'yui-base'], supersedes:['querystring-parse-simple']});

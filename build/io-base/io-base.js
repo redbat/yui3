@@ -831,5 +831,4 @@ Y.IO = IO;
 Y.io._map = {};
 
 
-
 }, '@VERSION@' ,{requires:['event-custom-base', 'querystring-stringify-simple']});

@@ -460,6 +460,17 @@ Y.Loader = function(o) {
      */
     self.conditions = {};
 
+   /**
+     * Specify whether or not to load optional dependencies for
+     * a specific modules. 
+     * ex. {"history-html5":false, "autocomplete-sources":true}
+     * Overrides loadOptional.
+     * @property loadOptionalCfg
+     * @type {string:boolean}
+     * 
+     */
+    self.loadOptionalCfg = {};
+
     // map of modules with a hash of modules that meet the requirement
     // self.provides = {};
 
@@ -520,16 +531,6 @@ Y.Loader = function(o) {
      */
     // self.loadOptional = false;
 
-   /**
-     * Specify whether or not to load optional dependencies for
-     * a specific modules. 
-     * ex. {"history-html5":false, "autocomplete-sources":true}
-     * Overrides loadOptional.
-     * @property loadOptionalCfg
-     * @type {string:boolean}
-     * 
-     */
-    self.loadOptionalCfg={} 	;
     /**
      * All of the derived dependencies in sorted order, which
      * will be populated when either calculate() or insert()
